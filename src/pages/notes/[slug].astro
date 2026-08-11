@@ -24,7 +24,7 @@ const fmt = date.toLocaleDateString('zh-CN', {
   <h1>{title}</h1>
   <p class="meta">{fmt}</p>
   <div class="tags">
-    {tags.map((t) => <span class="tag">{t}</span>)}
+    {tags.map((t) => <span class="tag" data-pagefind-filter="tag">{t}</span>)}
   </div>
   {summary && <p class="summary">{summary}</p>}
   <article class="prose">

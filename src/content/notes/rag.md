@@ -1,7 +1,7 @@
 ---
 title: RAG 检索增强生成入门笔记
 tags: ["AI", "RAG", "LLM", "检索", "Embedding"]
-date: 2026-08-10
+date: 2026-07-20
 summary: RAG 全链路详解：切分、向量化、检索、重排、生成的原理与方法，以及召回率优化、中文场景坑、评估体系等实践要点。
 draft: false
 ---

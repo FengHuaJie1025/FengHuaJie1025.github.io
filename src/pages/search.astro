@@ -13,7 +13,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   <script is:inline>
     window.addEventListener('load', function () {
       if (window.PagefindUI) {
-        new PagefindUI({ element: '#search', bundlePath: '/pagefind/' });
+        new PagefindUI({ element: '#search', bundlePath: '/pagefind/', showFilters: true });
       } else {
         var el = document.getElementById('search');
         if (el) {

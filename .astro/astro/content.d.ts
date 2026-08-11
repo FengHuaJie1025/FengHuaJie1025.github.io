@@ -141,9 +141,30 @@ declare module 'astro:content' {
 
 	type ContentEntryMap = {
 		"notes": {
+"ai-agent.md": {
+	id: "ai-agent.md";
+  slug: "ai-agent";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
 "ai-assisted-learning.md": {
 	id: "ai-assisted-learning.md";
   slug: "ai-assisted-learning";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
+"ai-coding-tools.md": {
+	id: "ai-coding-tools.md";
+  slug: "ai-coding-tools";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
+"ai-security.md": {
+	id: "ai-security.md";
+  slug: "ai-security";
   body: string;
   collection: "notes";
   data: InferEntrySchema<"notes">
@@ -155,42 +176,110 @@ declare module 'astro:content' {
   collection: "notes";
   data: InferEntrySchema<"notes">
 } & { render(): Render[".md"] };
-"prompt-formula-role-task-format.md": {
-	id: "prompt-formula-role-task-format.md";
-  slug: "prompt-formula-role-task-format";
+"ai-testing.md": {
+	id: "ai-testing.md";
+  slug: "ai-testing";
   body: string;
   collection: "notes";
   data: InferEntrySchema<"notes">
 } & { render(): Render[".md"] };
-"rag-basics.md": {
-	id: "rag-basics.md";
-  slug: "rag-basics";
+"context-engineering.md": {
+	id: "context-engineering.md";
+  slug: "context-engineering";
   body: string;
   collection: "notes";
   data: InferEntrySchema<"notes">
 } & { render(): Render[".md"] };
-};
-"projects": {
-"demo-cli-tool.md": {
-	id: "demo-cli-tool.md";
-  slug: "demo-cli-tool";
+"dify.md": {
+	id: "dify.md";
+  slug: "dify";
   body: string;
-  collection: "projects";
-  data: InferEntrySchema<"projects">
+  collection: "notes";
+  data: InferEntrySchema<"notes">
 } & { render(): Render[".md"] };
-"demo-data-platform.md": {
-	id: "demo-data-platform.md";
-  slug: "demo-data-platform";
+"fine-tuning.md": {
+	id: "fine-tuning.md";
+  slug: "fine-tuning";
   body: string;
-  collection: "projects";
-  data: InferEntrySchema<"projects">
+  collection: "notes";
+  data: InferEntrySchema<"notes">
 } & { render(): Render[".md"] };
-"test.md": {
-	id: "test.md";
-  slug: "test";
+"function-calling.md": {
+	id: "function-calling.md";
+  slug: "function-calling";
   body: string;
-  collection: "projects";
-  data: InferEntrySchema<"projects">
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
+"llm-deployment.md": {
+	id: "llm-deployment.md";
+  slug: "llm-deployment";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
+"llm-engineering.md": {
+	id: "llm-engineering.md";
+  slug: "llm-engineering";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
+"llm-wiki-karpathy.md": {
+	id: "llm-wiki-karpathy.md";
+  slug: "llm-wiki-karpathy";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
+"loop-engineering.md": {
+	id: "loop-engineering.md";
+  slug: "loop-engineering";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
+"mcp.md": {
+	id: "mcp.md";
+  slug: "mcp";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
+"prompt-advanced.md": {
+	id: "prompt-advanced.md";
+  slug: "prompt-advanced";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
+"prompt.md": {
+	id: "prompt.md";
+  slug: "prompt";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
+"rag.md": {
+	id: "rag.md";
+  slug: "rag";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
+"skill.md": {
+	id: "skill.md";
+  slug: "skill";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
+"spring-ai.md": {
+	id: "spring-ai.md";
+  slug: "spring-ai";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
 } & { render(): Render[".md"] };
 };
 
