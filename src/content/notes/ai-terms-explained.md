@@ -1,7 +1,7 @@
 ---
 title: "Agent、Skill、Harness 啥意思？一次性讲明白 AI 技术名词！"
 tags: ["AI", "Agent", "Skill", "Harness", "LLM"]
-date: 2026-08-11
+date: 2026-07-17
 summary: 用一次杭州旅行规划的故事，讲清 LLM、Token、Prompt、RAG、Function Calling、MCP、Agent、Skill、Harness 这些 AI 热词分别解决什么问题。
 draft: false
 ---

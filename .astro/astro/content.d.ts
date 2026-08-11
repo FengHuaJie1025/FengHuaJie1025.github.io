@@ -141,16 +141,23 @@ declare module 'astro:content' {
 
 	type ContentEntryMap = {
 		"notes": {
-"astro-collections.md": {
-	id: "astro-collections.md";
-  slug: "astro-collections";
+"ai-assisted-learning.md": {
+	id: "ai-assisted-learning.md";
+  slug: "ai-assisted-learning";
   body: string;
   collection: "notes";
   data: InferEntrySchema<"notes">
 } & { render(): Render[".md"] };
-"edgeone-deploy.md": {
-	id: "edgeone-deploy.md";
-  slug: "edgeone-deploy";
+"ai-terms-explained.md": {
+	id: "ai-terms-explained.md";
+  slug: "ai-terms-explained";
+  body: string;
+  collection: "notes";
+  data: InferEntrySchema<"notes">
+} & { render(): Render[".md"] };
+"prompt-formula-role-task-format.md": {
+	id: "prompt-formula-role-task-format.md";
+  slug: "prompt-formula-role-task-format";
   body: string;
   collection: "notes";
   data: InferEntrySchema<"notes">
