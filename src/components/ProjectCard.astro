@@ -1,0 +1,24 @@
+---
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  project: CollectionEntry<'projects'>;
+}
+const { project } = Astro.props;
+const { title, role, stack, period, summary, cover } = project.data;
+---
+<article class="card" data-stack={stack.join(' ')}>
+  {
+    cover && (
+      <img src={cover} alt={title} class="card-cover" loading="lazy" />
+    )
+  }
+  <div class="card-body">
+    <h3><a href={`/projects/${project.slug}`}>{title}</a></h3>
+    <p class="meta">{role}{period ? ` · ${period}` : ''}</p>
+    <p>{summary}</p>
+    <div class="tags">
+      {stack.map((s) => <span class="tag">{s}</span>)}
+    </div>
+  </div>
+</article>

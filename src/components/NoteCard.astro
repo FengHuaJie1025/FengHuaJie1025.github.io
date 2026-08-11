@@ -1,0 +1,24 @@
+---
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  note: CollectionEntry<'notes'>;
+}
+const { note } = Astro.props;
+const { title, tags, date, summary } = note.data;
+const fmt = date.toLocaleDateString('zh-CN', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+---
+<div class="note-item">
+  <div>
+    <h3><a href={`/notes/${note.slug}`}>{title}</a></h3>
+    {summary && <p>{summary}</p>}
+    <div class="tags">
+      {tags.map((t) => <span class="tag">{t}</span>)}
+    </div>
+  </div>
+  <span class="date">{fmt}</span>
+</div>

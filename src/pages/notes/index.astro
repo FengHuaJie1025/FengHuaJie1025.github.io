@@ -1,0 +1,16 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import NoteCard from '../../components/NoteCard.astro';
+
+const notes = (await getCollection('notes', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf()
+);
+---
+<BaseLayout title="知识沉淀 · 鱼吉君">
+  <h1>知识沉淀</h1>
+  <p class="meta">共 {notes.length} 篇</p>
+  <div class="list">
+    {notes.map((n) => <NoteCard note={n} />)}
+  </div>
+</BaseLayout>

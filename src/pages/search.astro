@@ -1,0 +1,26 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout title="搜索 · 鱼吉君">
+  <h1>站内搜索</h1>
+  <p class="hint meta">
+    基于 Pagefind 的全文检索，构建（<code>npm run build</code>）后自动生成索引并生效。
+  </p>
+  <div id="search"></div>
+
+  <link rel="stylesheet" href="/pagefind/pagefind-ui.css" />
+  <script is:inline src="/pagefind/pagefind-ui.js"></script>
+  <script is:inline>
+    window.addEventListener('load', function () {
+      if (window.PagefindUI) {
+        new PagefindUI({ element: '#search', bundlePath: '/pagefind/' });
+      } else {
+        var el = document.getElementById('search');
+        if (el) {
+          el.innerHTML =
+            '<p style="color:var(--fg-soft)">搜索索引尚未生成，请先执行构建（npm run build）。</p>';
+        }
+      }
+    });
+  </script>
+</BaseLayout>

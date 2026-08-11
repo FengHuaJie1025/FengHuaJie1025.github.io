@@ -1,0 +1,16 @@
+---
+---
+<button id="theme-toggle" aria-label="切换主题" class="theme-toggle" title="切换明暗主题">
+  🌓
+</button>
+<script>
+  const btn = document.getElementById('theme-toggle');
+  btn?.addEventListener('click', () => {
+    const root = document.documentElement;
+    root.classList.toggle('dark');
+    localStorage.setItem(
+      'theme',
+      root.classList.contains('dark') ? 'dark' : 'light'
+    );
+  });
+</script>

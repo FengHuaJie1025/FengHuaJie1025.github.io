@@ -1,0 +1,33 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export async function getStaticPaths() {
+  const notes = await getCollection('notes');
+  return notes.map((note) => ({
+    params: { slug: note.slug },
+    props: { note },
+  }));
+}
+
+const { note } = Astro.props;
+const { Content } = await note.render();
+const { title, tags, date, summary } = note.data;
+const fmt = date.toLocaleDateString('zh-CN', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+---
+<BaseLayout title={`${title} · 鱼吉君`} description={summary}>
+  <a href="/notes" class="back">← 返回知识沉淀</a>
+  <h1>{title}</h1>
+  <p class="meta">{fmt}</p>
+  <div class="tags">
+    {tags.map((t) => <span class="tag">{t}</span>)}
+  </div>
+  {summary && <p class="summary">{summary}</p>}
+  <article class="prose">
+    <Content />
+  </article>
+</BaseLayout>

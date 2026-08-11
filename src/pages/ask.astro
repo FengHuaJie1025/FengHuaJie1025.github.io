@@ -1,0 +1,17 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout title="AI 助手 · 鱼吉君">
+  <h1>AI 助手</h1>
+  <p class="lead">
+    这一页是二期功能的占位。后续将接入基于你知识库的 RAG 问答：把本站的
+    项目经历与知识沉淀作为检索语料，用国内大模型（DeepSeek 等）生成带引用来源的答案。
+  </p>
+  <p class="meta">
+    实现计划：构建时生成向量索引 → EdgeOne Edge Function <code>/api/ask</code>
+    完成「问题向量化 → 检索 → 大模型生成」→ 本页提供流式聊天界面。
+  </p>
+  <p class="cta">
+    <a class="btn btn-ghost" href="/notes">先逛逛知识沉淀</a>
+  </p>
+</BaseLayout>
