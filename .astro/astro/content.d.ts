@@ -141,48 +141,6 @@ declare module 'astro:content' {
 
 	type ContentEntryMap = {
 		"notes": {
-"astro-collections - 副本 (2).md": {
-	id: "astro-collections - 副本 (2).md";
-  slug: "astro-collections---副本-2";
-  body: string;
-  collection: "notes";
-  data: InferEntrySchema<"notes">
-} & { render(): Render[".md"] };
-"astro-collections - 副本 (3).md": {
-	id: "astro-collections - 副本 (3).md";
-  slug: "astro-collections---副本-3";
-  body: string;
-  collection: "notes";
-  data: InferEntrySchema<"notes">
-} & { render(): Render[".md"] };
-"astro-collections - 副本 (4).md": {
-	id: "astro-collections - 副本 (4).md";
-  slug: "astro-collections---副本-4";
-  body: string;
-  collection: "notes";
-  data: InferEntrySchema<"notes">
-} & { render(): Render[".md"] };
-"astro-collections - 副本 (5).md": {
-	id: "astro-collections - 副本 (5).md";
-  slug: "astro-collections---副本-5";
-  body: string;
-  collection: "notes";
-  data: InferEntrySchema<"notes">
-} & { render(): Render[".md"] };
-"astro-collections - 副本 (6).md": {
-	id: "astro-collections - 副本 (6).md";
-  slug: "astro-collections---副本-6";
-  body: string;
-  collection: "notes";
-  data: InferEntrySchema<"notes">
-} & { render(): Render[".md"] };
-"astro-collections - 副本.md": {
-	id: "astro-collections - 副本.md";
-  slug: "astro-collections---副本";
-  body: string;
-  collection: "notes";
-  data: InferEntrySchema<"notes">
-} & { render(): Render[".md"] };
 "astro-collections.md": {
 	id: "astro-collections.md";
   slug: "astro-collections";
@@ -209,20 +167,6 @@ declare module 'astro:content' {
 "demo-cli-tool.md": {
 	id: "demo-cli-tool.md";
   slug: "demo-cli-tool";
-  body: string;
-  collection: "projects";
-  data: InferEntrySchema<"projects">
-} & { render(): Render[".md"] };
-"demo-data-platform - 副本 (2).md": {
-	id: "demo-data-platform - 副本 (2).md";
-  slug: "demo-data-platform---副本-2";
-  body: string;
-  collection: "projects";
-  data: InferEntrySchema<"projects">
-} & { render(): Render[".md"] };
-"demo-data-platform - 副本.md": {
-	id: "demo-data-platform - 副本.md";
-  slug: "demo-data-platform---副本";
   body: string;
   collection: "projects";
   data: InferEntrySchema<"projects">
