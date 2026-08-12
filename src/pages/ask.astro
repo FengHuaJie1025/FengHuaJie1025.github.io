@@ -1,17 +1,528 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+
+const api = import.meta.env.PUBLIC_ASK_API || '';
 ---
+
 <BaseLayout title="AI 助手 · 鱼吉君">
   <h1>AI 助手</h1>
   <p class="lead">
-    这一页是二期功能的占位。后续将接入基于你知识库的 RAG 问答：把本站的
-    项目经历与知识沉淀作为检索语料，用国内大模型（DeepSeek 等）生成带引用来源的答案。
+    基于本站知识沉淀的 RAG 问答：把项目经历与 AI 学习笔记作为检索语料，用国内大模型生成带引用来源的中文回答。
   </p>
+
+  {api === '' && (
+    <div class="notice" id="config-warning">
+      ⚠️ 尚未配置 <code>PUBLIC_ASK_API</code>（SCF 云函数地址）。请在 <code>.env</code> 中填入函数 URL 后重新构建部署，方可发起问答。
+    </div>
+  )}
+
+  <section class="chat" id="chat">
+    <div class="messages" id="messages">
+      <div class="msg assistant">
+        <div class="bubble">你好，我是鱼吉君的 AI 助手。可以问我关于 AI、RAG、Prompt、MCP、微调等笔记里的内容～</div>
+      </div>
+    </div>
+
+    <div class="refs" id="refs"></div>
+
+    <form class="composer" id="composer" autocomplete="off">
+      <textarea
+        id="input"
+        rows="2"
+        placeholder="问我点什么…（Enter 发送，Shift+Enter 换行）"
+      ></textarea>
+      <div class="composer-actions">
+        <button type="button" class="btn btn-ghost" id="reset">新建对话</button>
+        <button type="submit" class="btn" id="send">发送</button>
+      </div>
+    </form>
+  </section>
+
   <p class="meta">
-    实现计划：构建时生成向量索引 → EdgeOne Edge Function <code>/api/ask</code>
-    完成「问题向量化 → 检索 → 大模型生成」→ 本页提供流式聊天界面。
-  </p>
-  <p class="cta">
-    <a class="btn btn-ghost" href="/notes">先逛逛知识沉淀</a>
+    实现：构建时分块生成索引 → 腾讯云 SCF 云函数（BM25 检索）→ Agnes 流式生成。知识库内容见
+    <a href="/notes">笔记总览</a>。
   </p>
 </BaseLayout>
+
+<script>
+  const API = import.meta.env.PUBLIC_ASK_API || ''
+  const messagesEl = document.getElementById('messages') as HTMLDivElement
+  const refsEl = document.getElementById('refs') as HTMLDivElement
+  const form = document.getElementById('composer') as HTMLFormElement
+  const input = document.getElementById('input') as HTMLTextAreaElement
+  const sendBtn = document.getElementById('send') as HTMLButtonElement
+  const resetBtn = document.getElementById('reset') as HTMLButtonElement
+
+  // 历史对话（{role, content}），用于多轮上下文
+  let history: { role: string; content: string }[] = []
+
+  // Astro 对 <style> 做了作用域：选择器会附加 data-astro-cid-* 属性。
+  // 动态创建的元素没有该属性，scoped 样式（含 .msg.user 靠右、表格边框）会失效。
+  // 这里从页面已有的 .msg 元素读取该属性名，挂到动态创建的元素上。
+  const _scopeAttr = (() => {
+    const el = document.querySelector('.msg')
+    if (!el) return null
+    return el.getAttributeNames().find((n: string) => n.startsWith('data-astro-cid')) || null
+  })()
+
+  function scrollBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight
+  }
+
+  function addMessage(role: 'user' | 'assistant') {
+    const wrap = document.createElement('div')
+    wrap.className = `msg ${role}`
+    if (_scopeAttr) wrap.setAttribute(_scopeAttr, '')
+    const bubble = document.createElement('div')
+    bubble.className = 'bubble'
+    if (_scopeAttr) bubble.setAttribute(_scopeAttr, '')
+    wrap.appendChild(bubble)
+    messagesEl.appendChild(wrap)
+    scrollBottom()
+    return bubble
+  }
+
+  function renderRefs(refs: any[]) {
+    refsEl.innerHTML = ''
+    if (!refs || !refs.length) return
+    const label = document.createElement('span')
+    label.className = 'refs-label'
+    label.textContent = '参考来源：'
+    refsEl.appendChild(label)
+    for (const r of refs) {
+      const a = document.createElement('a')
+      a.className = 'tag'
+      a.href = `/notes/${r.slug}/`
+      a.textContent = `${r.title}${r.totalChunks > 1 ? ` ·${r.chunkIndex}/${r.totalChunks}` : ''}`
+      a.title = `查看《${r.title}》`
+      refsEl.appendChild(a)
+    }
+  }
+
+  // ===== 轻量 Markdown → HTML 渲染器 =====
+  // 覆盖 Agnes 输出的常见子集：标题/加粗/斜体/行内代码/代码块/列表/引用/链接/分隔线/表格/段落。
+  // 安全：先全量 HTML 转义，再仅对识别出的语法替换为白名单标签。
+  function esc(s: string): string {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  }
+
+  /**
+   * 解析 GFM 表格：连续以 | 开头/结尾的行 + 分隔行 (|---|---|)
+   * 返回 HTML <table> 或 null（非表格行）。
+   */
+  function tryParseTable(lines: string[], startIdx: number): { html: string; consumed: number } | null {
+    if (startIdx >= lines.length) return null
+    // 表格必须以 | 行开头
+    if (!/^\s*\|/.test(lines[startIdx])) return null
+
+    const tableLines: string[] = []
+    let i = startIdx
+    while (i < lines.length && /^\s*\|/.test(lines[i])) {
+      tableLines.push(lines[i])
+      i++
+    }
+    if (tableLines.length < 2) return null // 至少需要 header + separator
+
+    // 解析每行的 cells（去掉首尾 |，按 | 分割）
+    const parseCells = (line: string): string[] => {
+      const trimmed = line.replace(/^\s*\|?\s*/, '').replace(/\s*\|?\s*$/, '')
+      return trimmed.split(/\s*\|\s*/).map(c => c.trim())
+    }
+
+    const headerCells = parseCells(tableLines[0])
+    const sepCells = parseCells(tableLines[1])
+    // 分隔行必须是 |-|-| 或类似格式
+    if (!sepCells.every(c => /^:?-+:?$/.test(c))) return null
+
+    const bodyRows: string[][] = []
+    for (let r = 2; r < tableLines.length; r++) {
+      bodyRows.push(parseCells(tableLines[r]))
+    }
+
+    // 构建 HTML
+    let th = headerCells.map(c => `<th>${c}</th>`).join('')
+    let bodyHtml = bodyRows.map(row =>
+      `<tr>${row.map(c => `<td>${c}</td>`).join('')}</tr>`
+    ).join('\n')
+
+    return {
+      html: `<table><thead><tr>${th}</tr></thead><tbody>${bodyHtml}</tbody></table>`,
+      consumed: tableLines.length,
+    }
+  }
+
+  function mdToHtml(raw: string): string {
+    let html = esc(raw)
+
+    // 代码块 ```lang\n...\n``` （行首，支持可选语言标识）
+    html = html.replace(/^```(\w*)\n([\s\S]*?)```/gm, (_m, lang, code) =>
+      `<pre><code class="lang-${esc(lang)}">${code}</code></pre>`)
+
+    // 标题（# ~ ######）
+    html = html.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>')
+    html = html.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>')
+    html = html.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>')
+    html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
+    html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+    html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
+
+    // 分隔线 --- / *** / ___
+    html = html.replace(/^(?:---|\*\*\*|___)\s*$/gm, '<hr>')
+
+    // 引用块 > （连续行合并）
+    html = html.replace(/^(?:>\s*.+\n?)+/gm, (block) => {
+      const lines = block.split('\n').filter((l: string) => l.startsWith('>'))
+      const inner = lines.map((l: string) => l.replace(/^>\s?/, '')).join('\n')
+      return `<blockquote>${mdToHtml(inner)}</blockquote>`
+    })
+
+    // ===== 表格（| col | col | + 分隔行）=====
+    // 按行分割后逐段尝试表格匹配
+    const lines = html.split('\n')
+    let outLines: string[] = []
+    let li = 0
+    while (li < lines.length) {
+      const tableResult = tryParseTable(lines, li)
+      if (tableResult) {
+        outLines.push(tableResult.html)
+        li += tableResult.consumed
+      } else {
+        outLines.push(lines[li])
+        li++
+      }
+    }
+    html = outLines.join('\n')
+
+    // 无序列表 - / *
+    html = html.replace(/^[\-\*]\s+(.+)$/gm, '<li>$1</li>')
+    // 有序列表 1. 2. 等
+    html = html.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+    // 把连续 <li> 包裹进 <ul>
+    html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
+
+    // 加粗 **text**
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    // 斜体 *text*（排除已处理的 **）
+    html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
+
+    // 行内代码 `code`
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+
+    // 链接 [text](url)
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+
+    // 段落：裸文本包裹 <p>（跳过已有块级标签开头的行）
+    html = html.replace(/^(?!<[hublotpra]|<\/|<hr|<blo)(.+)$/gm, (m: string) =>
+      m.trim() ? `<p>${m}</p>` : m
+    )
+
+    // 清理空段落
+    html = html.replace(/<p>\s*<\/p>/g, '')
+
+    return html
+  }
+
+  // 将 Markdown 文本渲染到 bubble（innerHTML），带节流避免高频重绘
+  let _renderTimer: ReturnType<typeof setTimeout> | null = null
+  function renderMarkdown(bubble: HTMLElement, text: string, immediate = false) {
+    if (_renderTimer) { clearTimeout(_renderTimer); _renderTimer = null }
+    const doRender = () => {
+      bubble.innerHTML = mdToHtml(text)
+      scrollBottom()
+    }
+    if (immediate) doRender()
+    else _renderTimer = setTimeout(doRender, 80) // 流式时最多 12fps 渲染
+  }
+
+  // SCF 后端模式（纯后端：检索 + 生成都在腾讯云 SCF 内完成）
+  async function ask(question: string) {
+    if (!API) {
+      const bubble = addMessage('assistant')
+      bubble.textContent = '尚未配置 PUBLIC_ASK_API（SCF 云函数地址），无法发起问答。请在 .env 中填入函数 URL 后重新构建部署。'
+      return
+    }
+
+    const bubble = addMessage('assistant')
+    let answer = ''
+
+    try {
+      const resp = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, conversation: history }),
+      })
+
+      if (!resp.ok || !resp.body) {
+        const err = await resp.json().catch(() => ({}))
+        bubble.textContent = `请求失败：${err.error || resp.status}`
+        return
+      }
+
+      const reader = resp.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let refs: any[] = []
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        let nl: number
+        while ((nl = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, nl).trim()
+          buffer = buffer.slice(nl + 1)
+          if (!line.startsWith('data:')) continue
+          const data = line.slice(5).trim()
+          if (!data) continue
+          let evt: any
+          try { evt = JSON.parse(data) } catch { continue }
+          if (evt.type === 'sources') {
+            refs = evt.references || []
+          } else if (evt.type === 'delta') {
+            answer += evt.content
+            renderMarkdown(bubble, answer) // 流式中节流渲染 Markdown
+          } else if (evt.type === 'done') {
+            refs = evt.references || refs
+          } else if (evt.type === 'error') {
+            answer += `\n\n（出错：${evt.message}）`
+          }
+        }
+      }
+
+      // 兜底：处理流末尾可能残留的不完整事件
+      if (buffer.trim()) {
+        const tail = buffer.trim()
+        if (tail.startsWith('data:')) {
+          try {
+            const evt = JSON.parse(tail.slice(5).trim())
+            if (evt.type === 'delta') answer += evt.content
+            else if (evt.type === 'error') answer += `\n\n（出错：${evt.message}）`
+          } catch { /* ignore */ }
+        }
+      }
+
+      // 最终渲染（强制立即，确保最终结果完整无误）
+      renderMarkdown(bubble, answer, true)
+
+      // 落库历史
+      history.push({ role: 'user', content: question })
+      history.push({ role: 'assistant', content: answer })
+      renderRefs(refs)
+    } catch (e: any) {
+      answer += `\n\n⚠️ 连接中断，回答可能不完整。常见原因：① SCF 函数执行超时——请在腾讯云控制台把「执行超时」调到 120s 以上并保存部署；② 网络波动。可点「新建对话」重试。`
+      renderMarkdown(bubble, answer, true)
+    }
+  }
+
+  sendBtn.disabled = !API
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const q = input.value.trim()
+    if (!q) return
+    addMessage('user').textContent = q
+    input.value = ''
+    sendBtn.disabled = true
+    ask(q).finally(() => { sendBtn.disabled = false; input.focus() })
+  })
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      form.requestSubmit()
+    }
+  })
+
+  resetBtn.addEventListener('click', () => {
+    history = []
+    refsEl.innerHTML = ''
+    messagesEl.innerHTML = ''
+    addMessage('assistant').textContent = '已开启新对话，继续问吧～'
+  })
+</script>
+
+<style>
+  .notice {
+    margin: 16px 0;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    background: color-mix(in srgb, #ffb020 14%, var(--card));
+    border: 1px solid color-mix(in srgb, #ffb020 40%, var(--border));
+    color: var(--fg);
+    font-size: 14px;
+  }
+  .chat {
+    margin-top: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-soft);
+    overflow: hidden;
+  }
+  .messages {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .msg {
+    display: flex;
+    width: 100%;
+  }
+  .msg.user {
+    justify-content: flex-end;
+  }
+  .bubble {
+    max-width: 82%;
+    width: fit-content;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.65;
+    word-break: break-word;
+  }
+  .msg.user .bubble {
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border-bottom-right-radius: 4px;
+    white-space: pre-wrap;
+  }
+  .msg.assistant .bubble {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+  }
+
+  /* ===== Markdown 渲染样式 ===== */
+  .msg.assistant .bubble h1,
+  .msg.assistant .bubble h2,
+  .msg.assistant .bubble h3,
+  .msg.assistant .bubble h4,
+  .msg.assistant .bubble h5,
+  .msg.assistant .bubble h6 {
+    margin: 0.7em 0 0.35em;
+    line-height: 1.35;
+    font-weight: 700;
+  }
+  .msg.assistant .bubble h1 { font-size: 1.25em; }
+  .msg.assistant .bubble h2 { font-size: 1.15em; }
+  .msg.assistant .bubble h3 { font-size: 1.08em; }
+  .msg.assistant .bubble p {
+    margin: 0.35em 0;
+  }
+  .msg.assistant .bubble p:first-child { margin-top: 0; }
+  .msg.assistant .bubble p:last-child { margin-bottom: 0; }
+  .msg.assistant .bubble ul,
+  .msg.assistant .bubble ol {
+    margin: 0.4em 0;
+    padding-left: 1.5em;
+  }
+  .msg.assistant .bubble li {
+    margin: 0.15em 0;
+    line-height: 1.6;
+  }
+  .msg.assistant .bubble li::marker { color: var(--fg-soft); }
+  .msg.assistant .bubble strong { font-weight: 700; }
+  .msg.assistant .bubble em { font-style: italic; }
+  .msg.assistant .bubble code {
+    font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+    font-size: 0.88em;
+    padding: 0.15em 0.35em;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--fg) 8%, transparent);
+  }
+  .msg.assistant .bubble pre {
+    margin: 0.6em 0;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--fg) 6%, var(--bg));
+    border: 1px solid color-mix(in srgb, var(--border) 2%, transparent);
+    overflow-x: auto;
+  }
+  .msg.assistant .bubble pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.85em;
+    line-height: 1.55;
+  }
+  .msg.assistant .bubble blockquote {
+    margin: 0.5em 0;
+    padding: 0.4em 1em;
+    border-left: 3px solid var(--accent);
+    color: var(--fg-soft);
+    background: color-mix(in srgb, var(--accent) 5%, transparent);
+    border-radius: 0 6px 6px 0;
+  }
+  .msg.assistant .bubble blockquote p { margin: 0.25em 0; }
+  .msg.assistant .bubble hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0.7em 0;
+  }
+  .msg.assistant .bubble a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .msg.assistant .bubble a:hover { opacity: 0.8; }
+
+  /* ===== 表格样式 ===== */
+  .msg.assistant .bubble table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.6em 0;
+    font-size: 0.93em;
+    overflow-x: auto;
+    display: block;
+    border: 1px solid var(--border);
+  }
+  .msg.assistant .bubble thead {
+    background: color-mix(in srgb, var(--fg) 7%, transparent);
+  }
+  .msg.assistant .bubble th,
+  .msg.assistant .bubble td {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    text-align: left;
+    line-height: 1.5;
+  }
+  .msg.assistant .bubble th {
+    font-weight: 700;
+    white-space: nowrap;
+    border-bottom: 2px solid var(--border);
+  }
+  .msg.assistant .bubble tbody tr:nth-child(even) {
+    background: color-mix(in srgb, var(--fg) 3%, transparent);
+  }
+
+  .refs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 18px 14px;
+  }
+  .refs-label { font-size: 13px; color: var(--fg-soft); }
+  .composer {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    padding: 14px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--card);
+  }
+  .composer textarea {
+    flex: 1;
+    resize: none;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font: inherit;
+    line-height: 1.5;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  .composer textarea:focus { outline: none; border-color: var(--accent); }
+  .composer textarea:disabled { opacity: 0.6; cursor: not-allowed; }
+  .composer-actions { display: flex; flex-direction: column; gap: 8px; }
+</style>

@@ -1,0 +1,5 @@
+#!/bin/bash
+# SCF Web 函数启动脚本（文件名固定为 scf_bootstrap）
+export PORT=9000
+cd "$(dirname "$0")"
+node index.js

@@ -6,13 +6,50 @@ import NoteCard from '../components/NoteCard.astro';
 const notes = (await getCollection('notes', ({ data }) => !data.draft))
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
   .slice(0, 20);
+
+const api = import.meta.env.PUBLIC_ASK_API || '';
 ---
+
 <BaseLayout title="鱼吉君 · 个人展示">
   <section class="hero">
     <h1>你好，我是鱼吉君</h1>
     <p class="lead">
       一些笔记、一些项目、一些思考，欢迎来逛。
     </p>
+  </section>
+
+  <!-- AI 助手对话框 -->
+  <section class="ai-chat" id="ai-chat">
+    <div class="chat-header">
+      <span class="chat-title">✦ AI 知识助手</span>
+      <span class="chat-sub">基于本站笔记的 RAG 问答</span>
+      <a href="/ask" class="chat-full">完整版 →</a>
+    </div>
+
+    {api === '' && (
+      <div class="notice">
+        ⚠️ 尚未配置 SCF 地址，问答暂不可用。
+      </div>
+    )}
+
+    <div class="chat-body">
+      <div class="messages" id="home-messages">
+        <div class="msg assistant">
+          <div class="bubble">你好！可以问我关于 AI、RAG、Prompt、MCP 等笔记里的内容～</div>
+        </div>
+      </div>
+
+      <div class="refs" id="home-refs"></div>
+
+      <form class="composer" id="home-composer" autocomplete="off">
+        <textarea
+          id="home-input"
+          rows="1"
+          placeholder="问我点什么…（Enter 发送）"
+        ></textarea>
+        <button type="submit" class="btn-send" id="home-send" disabled={!api}>发送</button>
+      </form>
+    </div>
   </section>
 
   <section>
@@ -22,3 +59,375 @@ const notes = (await getCollection('notes', ({ data }) => !data.draft))
     </div>
   </section>
 </BaseLayout>
+
+<script>
+  const API = import.meta.env.PUBLIC_ASK_API || ''
+  const messagesEl = document.getElementById('home-messages') as HTMLDivElement
+  const refsEl = document.getElementById('home-refs') as HTMLDivElement
+  const form = document.getElementById('home-composer') as HTMLFormElement
+  const input = document.getElementById('home-input') as HTMLTextAreaElement
+  const sendBtn = document.getElementById('home-send') as HTMLButtonElement
+
+  let history: { role: string; content: string }[] = []
+
+  // Astro scoped CSS：动态元素需挂载 data-astro-cid 属性
+  const _scopeAttr = (() => {
+    const el = document.querySelector('.msg')
+    if (!el) return null
+    return el.getAttributeNames().find((n: string) => n.startsWith('data-astro-cid')) || null
+  })()
+
+  function scrollBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight
+  }
+
+  function addMessage(role: 'user' | 'assistant') {
+    const wrap = document.createElement('div')
+    wrap.className = `msg ${role}`
+    if (_scopeAttr) wrap.setAttribute(_scopeAttr, '')
+    const bubble = document.createElement('div')
+    bubble.className = 'bubble'
+    if (_scopeAttr) bubble.setAttribute(_scopeAttr, '')
+    wrap.appendChild(bubble)
+    messagesEl.appendChild(wrap)
+    scrollBottom()
+    return bubble
+  }
+
+  function renderRefs(refs: any[]) {
+    refsEl.innerHTML = ''
+    if (!refs || !refs.length) return
+    const label = document.createElement('span')
+    label.className = 'refs-label'
+    label.textContent = '参考来源：'
+    refsEl.appendChild(label)
+    for (const r of refs) {
+      const a = document.createElement('a')
+      a.className = 'tag'
+      a.href = `/notes/${r.slug}/`
+      a.textContent = r.title
+      a.title = `查看《${r.title}》`
+      refsEl.appendChild(a)
+    }
+  }
+
+  // ===== 轻量 Markdown 渲染器 =====
+  function esc(s: string): string {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  }
+
+  function tryParseTable(lines: string[], startIdx: number): { html: string; consumed: number } | null {
+    if (startIdx >= lines.length || !/^\s*\|/.test(lines[startIdx])) return null
+    const tableLines: string[] = []
+    let i = startIdx
+    while (i < lines.length && /^\s*\|/.test(lines[i])) { tableLines.push(lines[i]); i++ }
+    if (tableLines.length < 2) return null
+    const parseCells = (line: string): string[] =>
+      line.replace(/^\s*\|?\s*/, '').replace(/\s*\|?\s*$/, '').split(/\s*\|\s*/).map(c => c.trim())
+    const sepCells = parseCells(tableLines[1])
+    if (!sepCells.every(c => /^:?-+:?$/.test(c))) return null
+    const th = parseCells(tableLines[0]).map(c => `<th>${c}</th>`).join('')
+    const bodyHtml = tableLines.slice(2).map(row =>
+      `<tr>${parseCells(row).map(c => `<td>${c}</td>`).join('')}</tr>`
+    ).join('\n')
+    return { html: `<table><thead><tr>${th}</tr></thead><tbody>${bodyHtml}</tbody></table>`, consumed: tableLines.length }
+  }
+
+  function mdToHtml(raw: string): string {
+    let html = esc(raw)
+    html = html.replace(/^```(\w*)\n([\s\S]*?)```/gm, (_m, lang, code) =>
+      `<pre><code class="lang-${esc(lang)}">${code}</code></pre>`)
+    html = html.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>')
+    html = html.replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>')
+    html = html.replace(/^####\s+(.+)$/gm, '<h4>$1</h4>')
+    html = html.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
+    html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+    html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
+    html = html.replace(/^(?:---|\*\*\*|___)\s*$/gm, '<hr>')
+    html = html.replace(/^(?:>\s*.+\n?)+/gm, (block) => {
+      const lines = block.split('\n').filter((l: string) => l.startsWith('>'))
+      const inner = lines.map((l: string) => l.replace(/^>\s?/, '')).join('\n')
+      return `<blockquote>${mdToHtml(inner)}</blockquote>`
+    })
+    const lines = html.split('\n')
+    let outLines: string[] = [], li = 0
+    while (li < lines.length) {
+      const t = tryParseTable(lines, li)
+      if (t) { outLines.push(t.html); li += t.consumed } else { outLines.push(lines[li]); li++ }
+    }
+    html = outLines.join('\n')
+    html = html.replace(/^[\-\*]\s+(.+)$/gm, '<li>$1</li>')
+    html = html.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+    html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    html = html.replace(/^(?!<[hublotpra]|<\/|<hr|<blo)(.+)$/gm, (m: string) =>
+      m.trim() ? `<p>${m}</p>` : m)
+    html = html.replace(/<p>\s*<\/p>/g, '')
+    return html
+  }
+
+  let _renderTimer: ReturnType<typeof setTimeout> | null = null
+  function renderMarkdown(bubble: HTMLElement, text: string, immediate = false) {
+    if (_renderTimer) { clearTimeout(_renderTimer); _renderTimer = null }
+    const doRender = () => { bubble.innerHTML = mdToHtml(text); scrollBottom() }
+    if (immediate) doRender()
+    else _renderTimer = setTimeout(doRender, 80)
+  }
+
+  async function ask(question: string) {
+    if (!API) return
+    const bubble = addMessage('assistant')
+    let answer = ''
+    try {
+      const resp = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, conversation: history }),
+      })
+      if (!resp.ok || !resp.body) {
+        const err = await resp.json().catch(() => ({}))
+        bubble.textContent = `请求失败：${err.error || resp.status}`
+        return
+      }
+      const reader = resp.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let refs: any[] = []
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        let nl: number
+        while ((nl = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, nl).trim()
+          buffer = buffer.slice(nl + 1)
+          if (!line.startsWith('data:')) continue
+          const data = line.slice(5).trim()
+          if (!data) continue
+          let evt: any
+          try { evt = JSON.parse(data) } catch { continue }
+          if (evt.type === 'sources') refs = evt.references || []
+          else if (evt.type === 'delta') { answer += evt.content; renderMarkdown(bubble, answer) }
+          else if (evt.type === 'done') refs = evt.references || refs
+          else if (evt.type === 'error') answer += `\n\n（出错：${evt.message}）`
+        }
+      }
+      if (buffer.trim()) {
+        const tail = buffer.trim()
+        if (tail.startsWith('data:')) {
+          try {
+            const evt = JSON.parse(tail.slice(5).trim())
+            if (evt.type === 'delta') answer += evt.content
+            else if (evt.type === 'error') answer += `\n\n（出错：${evt.message}）`
+          } catch {}
+        }
+      }
+      renderMarkdown(bubble, answer, true)
+      history.push({ role: 'user', content: question })
+      history.push({ role: 'assistant', content: answer })
+      renderRefs(refs)
+    } catch (e: any) {
+      answer += `\n\n⚠️ 连接中断，回答可能不完整。可前往<a href="/ask">AI 助手完整版</a>重试。`
+      renderMarkdown(bubble, answer, true)
+    }
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault()
+    const q = input.value.trim()
+    if (!q || !API) return
+    addMessage('user').textContent = q
+    input.value = ''
+    sendBtn.disabled = true
+    ask(q).finally(() => { sendBtn.disabled = false; input.focus() })
+  })
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit() }
+  })
+
+  // 自动撑高 textarea
+  input.addEventListener('input', () => {
+    input.style.height = 'auto'
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px'
+  })
+</script>
+
+<style>
+  /* ===== 首页 AI 对话框 ===== */
+  .ai-chat {
+    margin: 28px 0 36px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-soft);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .chat-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+    flex-wrap: wrap;
+  }
+  .chat-title {
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--fg);
+  }
+  .chat-sub {
+    font-size: 13px;
+    color: var(--fg-soft);
+  }
+  .chat-full {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .chat-full:hover { text-decoration: underline; }
+
+  .notice {
+    margin: 0;
+    padding: 10px 18px;
+    font-size: 13px;
+    color: var(--fg-soft);
+    background: color-mix(in srgb, #ffb020 12%, var(--card));
+    border-bottom: 1px solid color-mix(in srgb, #ffb020 25%, var(--border));
+  }
+
+  .chat-body {
+    display: flex;
+    flex-direction: column;
+    max-height: 420px;
+  }
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 120px;
+    max-height: 280px;
+  }
+  .msg {
+    display: flex;
+    width: 100%;
+  }
+  .msg.user { justify-content: flex-end; }
+  .bubble {
+    max-width: 88%;
+    width: fit-content;
+    padding: 8px 12px;
+    border-radius: 12px;
+    line-height: 1.6;
+    word-break: break-word;
+    font-size: 14px;
+  }
+  .msg.user .bubble {
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border-bottom-right-radius: 3px;
+    white-space: pre-wrap;
+  }
+  .msg.assistant .bubble {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 3px;
+  }
+
+  /* Markdown 样式 */
+  .msg.assistant .bubble h1, .msg.assistant .bubble h2,
+  .msg.assistant .bubble h3, .msg.assistant .bubble h4,
+  .msg.assistant .bubble h5, .msg.assistant .bubble h6 {
+    margin: 0.5em 0 0.25em;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+  .msg.assistant .bubble h1 { font-size: 1.15em; }
+  .msg.assistant .bubble h2 { font-size: 1.08em; }
+  .msg.assistant .bubble p { margin: 0.25em 0; }
+  .msg.assistant .bubble ul, .msg.assistant .bubble ol {
+    margin: 0.3em 0; padding-left: 1.3em;
+  }
+  .msg.assistant .bubble li { margin: 0.1em 0; line-height: 1.55; }
+  .msg.assistant .bubble strong { font-weight: 700; }
+  .msg.assistant .bubble em { font-style: italic; }
+  .msg.assistant .bubble code {
+    font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+    font-size: 0.85em; padding: 0.12em 0.3em; border-radius: 4px;
+    background: color-mix(in srgb, var(--fg) 8%, transparent);
+  }
+  .msg.assistant .bubble pre {
+    margin: 0.5em 0; padding: 8px 10px; border-radius: 6px;
+    background: color-mix(in srgb, var(--fg) 6%, var(--bg));
+    overflow-x: auto;
+  }
+  .msg.assistant .bubble pre code { background: none; padding: 0; font-size: 0.82em; }
+  .msg.assistant .bubble blockquote {
+    margin: 0.35em 0; padding: 0.3em 0.8em;
+    border-left: 3px solid var(--accent);
+    color: var(--fg-soft);
+    background: color-mix(in srgb, var(--accent) 4%, transparent);
+    border-radius: 0 5px 5px 0;
+  }
+  .msg.assistant .bubble blockquote p { margin: 0.2em 0; }
+  .msg.assistant .bubble hr {
+    border: none; border-top: 1px solid var(--border); margin: 0.5em 0;
+  }
+  .msg.assistant .bubble a { color: var(--accent); text-decoration: underline; text-underline-offset: 1px; }
+
+  /* 表格 */
+  .msg.assistant .bubble table {
+    width: 100%; border-collapse: collapse; margin: 0.5em 0;
+    font-size: 0.9em; display: block; overflow-x: auto;
+    border: 1px solid var(--border);
+  }
+  .msg.assistant .bubble thead { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+  .msg.assistant .bubble th, .msg.assistant .bubble td {
+    padding: 6px 10px; border: 1px solid var(--border); text-align: left;
+  }
+  .msg.assistant .bubble th { font-weight: 700; white-space: nowrap; border-bottom: 2px solid var(--border); }
+  .msg.assistant .bubble tbody tr:nth-child(even) { background: color-mix(in srgb, var(--fg) 3%, transparent); }
+
+  .refs {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+    padding: 4px 18px 10px;
+  }
+  .refs-label { font-size: 12px; color: var(--fg-soft); }
+
+  .composer {
+    display: flex; gap: 8px; align-items: flex-end;
+    padding: 10px 18px; border-top: 1px solid var(--border); background: var(--card);
+  }
+  .composer textarea {
+    flex: 1; resize: none; border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font: inherit;
+    line-height: 1.5; background: var(--bg); color: var(--fg);
+    max-height: 120px; min-height: 36px;
+  }
+  .composer textarea:focus { outline: none; border-color: var(--accent); }
+  .composer textarea:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-send {
+    flex-shrink: 0; padding: 8px 16px; border-radius: 8px;
+    background: var(--accent); color: var(--accent-contrast);
+    font-weight: 600; font-size: 14px; border: none; cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-send:hover { opacity: 0.9; }
+  .btn-send:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  @media (max-width: 600px) {
+    .ai-chat { margin: 20px 0 28px; }
+    .messages { max-height: 220px; min-height: 90px; padding: 10px 14px; }
+    .bubble { max-width: 92%; font-size: 13px; }
+    .composer { padding: 8px 14px; }
+    .chat-header { padding: 10px 14px; }
+  }
+</style>

@@ -13,3 +13,7 @@ pnpm-debug.log*
 .env.local
 # pagefind generated index
 pagefind/
+# astro build cache
+.astro/
+# local assistant data (memory / daily logs) — 本地数据，勿提交
+.workbuddy/
