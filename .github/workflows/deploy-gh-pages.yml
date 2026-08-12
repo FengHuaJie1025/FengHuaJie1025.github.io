@@ -34,6 +34,8 @@ jobs:
         run: npm ci
 
       - name: 构建站点（含 Pagefind 索引）
+        env:
+          PUBLIC_ASK_API: ${{ secrets.PUBLIC_ASK_API }}
         run: npm run build
 
       - name: 上传构建产物
