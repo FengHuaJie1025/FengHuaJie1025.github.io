@@ -6,6 +6,10 @@ summary: 不依赖 LangChain/LangGraph，从零实现 Agent 系统的工程实�
 draft: false
 ---
 
+## 项目地址
+
+https://github.com/FengHuaJie1025/FDE/tree/main/agent
+
 ## 设计原则
 
 从零实现 Agent（不依赖 LangChain/LangGraph 等框架）的好处是深入理解底层原理，避免框架抽象带来的黑盒问题。

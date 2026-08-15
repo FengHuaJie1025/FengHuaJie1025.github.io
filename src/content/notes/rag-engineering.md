@@ -6,6 +6,10 @@ summary: 基于 Milvus 向量数据库的 RAG 知识库工程实践。涵盖文�
 draft: false
 ---
 
+## 项目地址
+
+https://github.com/FengHuaJie1025/FDE/tree/main/rag_knowledge_base
+
 ## 整体架构
 
 ```

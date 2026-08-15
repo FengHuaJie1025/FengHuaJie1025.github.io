@@ -6,6 +6,10 @@ summary: 基于 OpenAI SDK 构建通用 LLM 对话机器人的架构设计。通
 draft: false
 ---
 
+## 项目地址
+
+https://github.com/FengHuaJie1025/FDE/tree/main/chatbot
+
 ## 整体架构
 
 ```
