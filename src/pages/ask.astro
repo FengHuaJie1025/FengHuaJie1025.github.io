@@ -23,8 +23,6 @@ const api = import.meta.env.PUBLIC_ASK_API || '';
       </div>
     </div>
 
-    <div class="refs" id="refs"></div>
-
     <form class="composer" id="composer" autocomplete="off">
       <textarea
         id="input"
@@ -47,7 +45,6 @@ const api = import.meta.env.PUBLIC_ASK_API || '';
 <script>
   const API = import.meta.env.PUBLIC_ASK_API || ''
   const messagesEl = document.getElementById('messages') as HTMLDivElement
-  const refsEl = document.getElementById('refs') as HTMLDivElement
   const form = document.getElementById('composer') as HTMLFormElement
   const input = document.getElementById('input') as HTMLTextAreaElement
   const sendBtn = document.getElementById('send') as HTMLButtonElement
@@ -82,21 +79,31 @@ const api = import.meta.env.PUBLIC_ASK_API || '';
     return bubble
   }
 
+  // 渲染参考来源链接到最新的 AI 消息气泡底部
   function renderRefs(refs: any[]) {
-    refsEl.innerHTML = ''
     if (!refs || !refs.length) return
+    // 找到最后一个 assistant 消息气泡
+    const bubbles = messagesEl.querySelectorAll('.msg.assistant .bubble')
+    const last = bubbles[bubbles.length - 1] as HTMLElement | undefined
+    if (!last) return
+    // 移除之前可能已添加的引用区域
+    const existing = last.querySelector('.refs-inline')
+    if (existing) existing.remove()
+    const container = document.createElement('div')
+    container.className = 'refs-inline'
     const label = document.createElement('span')
-    label.className = 'refs-label'
+    label.className = 'refs-inline-label'
     label.textContent = '参考来源：'
-    refsEl.appendChild(label)
+    container.appendChild(label)
     for (const r of refs) {
       const a = document.createElement('a')
       a.className = 'tag'
       a.href = `/notes/${r.slug}/`
       a.textContent = `${r.title}${r.totalChunks > 1 ? ` ·${r.chunkIndex}/${r.totalChunks}` : ''}`
       a.title = `查看《${r.title}》`
-      refsEl.appendChild(a)
+      container.appendChild(a)
     }
+    last.appendChild(container)
   }
 
   // ===== 轻量 Markdown → HTML 渲染器 =====
@@ -335,7 +342,6 @@ const api = import.meta.env.PUBLIC_ASK_API || '';
 
   resetBtn.addEventListener('click', () => {
     history = []
-    refsEl.innerHTML = ''
     messagesEl.innerHTML = ''
     addMessage('assistant').textContent = '已开启新对话，继续问吧～'
   })
@@ -495,14 +501,21 @@ const api = import.meta.env.PUBLIC_ASK_API || '';
     background: color-mix(in srgb, var(--fg) 3%, transparent);
   }
 
-  .refs {
+  /* ===== 气泡内参考来源 ===== */
+  .refs-inline {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
-    padding: 6px 18px 14px;
+    gap: 5px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
   }
-  .refs-label { font-size: 13px; color: var(--fg-soft); }
+  .refs-inline-label {
+    font-size: 12px;
+    color: var(--fg-soft);
+    margin-right: 2px;
+  }
   .composer {
     display: flex;
     gap: 10px;

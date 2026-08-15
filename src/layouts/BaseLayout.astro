@@ -37,5 +37,67 @@ const { title, description = '个人展示网站：项目经历与知识沉淀' 
       <slot />
     </main>
     <Footer />
+
+    <!-- 返回顶部按钮 -->
+    <button id="back-to-top" aria-label="返回顶部">↑</button>
+
+    <script>
+      const btn = document.getElementById('back-to-top');
+      if (btn) {
+        const update = () => {
+          btn.classList.toggle('show', window.scrollY > 300);
+        };
+        window.addEventListener('scroll', update, { passive: true });
+        btn.addEventListener('click', () => {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        update();
+      }
+    </script>
+
+    <style>
+      #back-to-top {
+        position: fixed;
+        right: 24px;
+        bottom: 32px;
+        width: 42px;
+        height: 42px;
+        border: 1px solid var(--border);
+        border-radius: 50%;
+        background: var(--card);
+        color: var(--fg);
+        font-size: 20px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        opacity: 0;
+        transform: translateY(12px);
+        transition: opacity 0.25s, transform 0.25s, box-shadow 0.2s;
+        pointer-events: none;
+        z-index: 999;
+      }
+      #back-to-top.show {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      #back-to-top:hover {
+        box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+        background: var(--accent);
+        color: var(--accent-contrast);
+        border-color: var(--accent);
+      }
+      @media (max-width: 600px) {
+        #back-to-top {
+          right: 16px;
+          bottom: 20px;
+          width: 38px;
+          height: 38px;
+          font-size: 18px;
+        }
+      }
+    </style>
   </body>
 </html>

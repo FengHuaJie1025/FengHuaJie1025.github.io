@@ -4,8 +4,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import NoteCard from '../components/NoteCard.astro';
 
 const notes = (await getCollection('notes', ({ data }) => !data.draft))
-  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
-  .slice(0, 20);
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 
 const api = import.meta.env.PUBLIC_ASK_API || '';
 ---
@@ -39,8 +38,6 @@ const api = import.meta.env.PUBLIC_ASK_API || '';
         </div>
       </div>
 
-      <div class="refs" id="home-refs"></div>
-
       <form class="composer" id="home-composer" autocomplete="off">
         <textarea
           id="home-input"
@@ -63,7 +60,6 @@ const api = import.meta.env.PUBLIC_ASK_API || '';
 <script>
   const API = import.meta.env.PUBLIC_ASK_API || ''
   const messagesEl = document.getElementById('home-messages') as HTMLDivElement
-  const refsEl = document.getElementById('home-refs') as HTMLDivElement
   const form = document.getElementById('home-composer') as HTMLFormElement
   const input = document.getElementById('home-input') as HTMLTextAreaElement
   const sendBtn = document.getElementById('home-send') as HTMLButtonElement
@@ -94,21 +90,29 @@ const api = import.meta.env.PUBLIC_ASK_API || '';
     return bubble
   }
 
+  // 渲染参考来源链接到最新的 AI 消息气泡底部
   function renderRefs(refs: any[]) {
-    refsEl.innerHTML = ''
     if (!refs || !refs.length) return
+    const bubbles = messagesEl.querySelectorAll('.msg.assistant .bubble')
+    const last = bubbles[bubbles.length - 1] as HTMLElement | undefined
+    if (!last) return
+    const existing = last.querySelector('.refs-inline')
+    if (existing) existing.remove()
+    const container = document.createElement('div')
+    container.className = 'refs-inline'
     const label = document.createElement('span')
-    label.className = 'refs-label'
+    label.className = 'refs-inline-label'
     label.textContent = '参考来源：'
-    refsEl.appendChild(label)
+    container.appendChild(label)
     for (const r of refs) {
       const a = document.createElement('a')
       a.className = 'tag'
       a.href = `/notes/${r.slug}/`
       a.textContent = r.title
       a.title = `查看《${r.title}》`
-      refsEl.appendChild(a)
+      container.appendChild(a)
     }
+    last.appendChild(container)
   }
 
   // ===== 轻量 Markdown 渲染器 =====
@@ -396,11 +400,15 @@ const api = import.meta.env.PUBLIC_ASK_API || '';
   .msg.assistant .bubble th { font-weight: 700; white-space: nowrap; border-bottom: 2px solid var(--border); }
   .msg.assistant .bubble tbody tr:nth-child(even) { background: color-mix(in srgb, var(--fg) 3%, transparent); }
 
-  .refs {
+  /* ===== 气泡内参考来源 ===== */
+  .refs-inline {
     display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
-    padding: 4px 18px 10px;
+    margin-top: 8px; padding-top: 6px;
+    border-top: 1px solid var(--border);
   }
-  .refs-label { font-size: 12px; color: var(--fg-soft); }
+  .refs-inline-label {
+    font-size: 11px; color: var(--fg-soft); margin-right: 2px;
+  }
 
   .composer {
     display: flex; gap: 8px; align-items: flex-end;
